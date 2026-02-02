@@ -314,7 +314,7 @@ export default function PlayPage() {
   if (gameStatus === 'playing') {
     return (
       <div
-        className="min-h-screen px-5 py-10 transition-colors"
+        className="h-screen px-5 py-10 transition-colors"
         style={{
           background: `linear-gradient(135deg, ${currentStage.color}20 0%, #050816 100%)`
         }}
@@ -325,20 +325,6 @@ export default function PlayPage() {
             <div className="flex items-center gap-3">
               <span className="text-xl">👤</span>
               <span className="font-semibold">{playerName}</span>
-            </div>
-
-            <div className="text-right">
-              <p className="text-xs uppercase tracking-widest text-gray-400">
-                Your taps
-              </p>
-              <motion.p
-                key={clickCount}
-                initial={{ scale: 1.5, color: currentStage.color }}
-                animate={{ scale: 1, color: '#F8F9FA' }}
-                className="text-2xl font-bold"
-              >
-                {clickCount}
-              </motion.p>
             </div>
           </div>
 
@@ -429,15 +415,6 @@ export default function PlayPage() {
           <p className="mb-8 text-gray-400">
             You helped bring in 2026!
           </p>
-
-          <div className="mb-8 rounded-2xl border border-orange-400/30 bg-white/5 px-12 py-6">
-            <p className="bg-gradient-to-r from-orange-400 to-yellow-400 bg-clip-text text-4xl font-bold text-transparent">
-              {clickCount}
-            </p>
-            <p className="mt-2 text-xs uppercase tracking-widest text-gray-400">
-              Your taps
-            </p>
-          </div>
 
           <motion.div
             initial={{ opacity: 0, y: 20 }}
