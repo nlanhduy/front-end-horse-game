@@ -11,7 +11,7 @@ interface RoomState {
   players: Array<{
     id: string
     name: string
-    score: number
+    clickCount: number
   }>
   progress: number
   started: boolean
@@ -73,7 +73,6 @@ export function useRoom() {
 
   const sendClick = useCallback(
     (roomId: string, playerId: string, callback?: (res: SocketResponse) => void) => {
-        console.log(roomId, playerId)
       emit<SocketResponse>('player-click', { roomId, playerId }, callback)
     },
     [emit]
@@ -85,7 +84,6 @@ export function useRoom() {
         'get-room-state',
         { roomId },
         (response) => {
-          console.log(response)
           if (response.success && response.room) {
             setRoomState(response.room)
           } else {

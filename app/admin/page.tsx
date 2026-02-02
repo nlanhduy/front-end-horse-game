@@ -15,7 +15,7 @@ import { stages } from '../constants';
 import { ClickEffect, GameStatus, Player } from '../types/game';
 
 export default function AdminDashboard() {
-  const { isConnected, createRoom, startGame, on, off } = useRoom()
+  const { isConnected, createRoom, startGame, getRoomState, on, off } = useRoom()
 
   const [roomId, setRoomId] = useState<string | null>(null)
   const [qrCode, setQrCode] = useState<string | null>(null)
@@ -27,6 +27,21 @@ export default function AdminDashboard() {
   const [clickEffects, setClickEffects] = useState<ClickEffect[]>([])
   const [obstacles, setObstacles] = useState<Array<{ id: number; type: 'tree' | 'bush' |'fence'; y: number }>>([])
   const [countdown, setCountdown] = useState<number | null>(null)
+  const [playerStats, setPlayerStats] = useState<Array<{ name: string; clicks: number }>>([])
+  const [showLeastClicks, setShowLeastClicks] = useState(false)
+
+  const refreshPlayerStats = (currentRoomId: string) => {
+    getRoomState(currentRoomId, (res: any) => {
+      if (res.success && res.room?.players) {
+        setPlayerStats(
+          res.room.players.map((player: { name: string; clickCount: number }) => ({
+            name: player.name,
+            clicks: player.clickCount ?? 0
+          }))
+        )
+      }
+    })
+  }
 
   const getRandomColor = () => {
     const colors = [
@@ -73,7 +88,9 @@ export default function AdminDashboard() {
 
     const handleGameComplete = () => {
       setGameStatus('completed')
-       
+      if (roomId) {
+        refreshPlayerStats(roomId)
+      }
       fireConfetti()
     }
 
@@ -88,7 +105,12 @@ export default function AdminDashboard() {
       off('progress-update', handleProgressUpdate)
       off('game-complete', handleGameComplete)
     }
-  }, [isConnected, on, off])
+  }, [isConnected, on, off, roomId, getRoomState])
+
+  useEffect(() => {
+    if (gameStatus !== 'completed' || !showLeastClicks || !roomId) return
+    refreshPlayerStats(roomId)
+  }, [gameStatus, showLeastClicks, roomId, getRoomState])
 
   // Countdown timer
   useEffect(() => {
@@ -439,18 +461,60 @@ export default function AdminDashboard() {
 
   if (gameStatus === 'completed') {
     const endingScreenUrl = '/ending_screen.webp'
+    const leastClickedPlayers = playerStats
+      .sort((a, b) => a.clicks - b.clicks)
+      .slice(0, 3)
+
     return (
-    <div className="relative min-h-screen">
-      <Image
-        src={endingScreenUrl}
-        alt="Ending screen"
-        fill
-        priority
-        quality={70}
-        sizes="100vw"
-        style={{ objectFit: 'cover', objectPosition: 'top' }}
-      />
-    </div>
+      <div className="relative min-h-screen" style={{ backgroundImage: `url(${endingScreenUrl})`, backgroundSize: 'cover' }}>
+        {showLeastClicks ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="w-full max-w-2xl rounded-3xl border border-white/10 bg-white/5 p-12 text-center backdrop-blur-xl"
+            >
+              <h2 className="mb-8 bg-gradient-to-r from-orange-400 to-yellow-400 bg-clip-text text-4xl font-bold text-transparent">
+                Need More Clicks! 🎯
+              </h2>
+              <p className="mb-8 text-gray-300">The 3 players with the least taps:</p>
+              
+              <div className="space-y-4 mb-8">
+                {leastClickedPlayers.map((player, index) => (
+                  <motion.div
+                    key={player.name}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                    className="rounded-xl bg-gradient-to-r from-red-500/30 to-orange-500/30 p-4 flex justify-between items-center"
+                  >
+                    <span className="text-xl font-bold text-white">{player.name}</span>
+                    <span className="text-2xl font-bold bg-gradient-to-r from-orange-400 to-yellow-400 bg-clip-text text-transparent">
+                      {player.clicks} taps
+                    </span>
+                  </motion.div>
+                ))}
+              </div>
+
+              <button
+                onClick={() => setShowLeastClicks(false)}
+                className="rounded-xl bg-gradient-to-r from-orange-500 to-yellow-500 px-8 py-4 font-semibold text-white shadow-lg hover:scale-105 transition"
+              >
+                Back
+              </button>
+            </motion.div>
+          </div>
+        ) : (
+          <div className="absolute bottom-10 left-1/2 transform -translate-x-1/2 cursor-pointer z-999">
+            <button
+              onClick={() => setShowLeastClicks(true)}
+              className="rounded-xl bg-gradient-to-r from-orange-500 to-yellow-500 px-8 py-4 font-semibold text-white shadow-lg hover:scale-105 transition"
+            >
+              Next: Show Least Taps
+            </button>
+          </div>
+        )}
+      </div>
       // <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-[#0A0E27] via-[#1a0f2e] to-[#050816] p-5 relative overflow-hidden">
       //   {/* Animated background particles */}
       //   <div className="absolute inset-0 overflow-hidden">
