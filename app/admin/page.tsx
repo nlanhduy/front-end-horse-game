@@ -1,10 +1,13 @@
-/* eslint-disable jsx-a11y/alt-text */
+/* eslint-disable react-hooks/immutability */
+ 
+ 
 /* eslint-disable @next/next/no-img-element */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client'
 
 import confetti from 'canvas-confetti';
 import { AnimatePresence, motion } from 'framer-motion';
+import Image from 'next/image';
 import { useEffect, useState } from 'react';
 
 import { useRoom } from '../../hooks/useRoom';
@@ -22,6 +25,8 @@ export default function AdminDashboard() {
   const [progress, setProgress] = useState<number>(0)
   const [totalClicks, setTotalClicks] = useState<number>(0)
   const [clickEffects, setClickEffects] = useState<ClickEffect[]>([])
+  const [obstacles, setObstacles] = useState<Array<{ id: number; type: 'tree' | 'bush' |'fence'; y: number }>>([])
+  const [countdown, setCountdown] = useState<number | null>(null)
 
   const getRandomColor = () => {
     const colors = [
@@ -39,7 +44,9 @@ export default function AdminDashboard() {
       setPlayers(data.players || [])
     }
 
-    const handleGameStarted = () => setGameStatus('playing')
+    const handleGameStarted = () => {
+      setCountdown(5)
+    }
 
     const handleProgressUpdate = (data: {
       progress: number
@@ -66,7 +73,7 @@ export default function AdminDashboard() {
 
     const handleGameComplete = () => {
       setGameStatus('completed')
-      // eslint-disable-next-line react-hooks/immutability
+       
       fireConfetti()
     }
 
@@ -83,6 +90,46 @@ export default function AdminDashboard() {
     }
   }, [isConnected, on, off])
 
+  // Countdown timer
+  useEffect(() => {
+    if (countdown === null) return
+    
+    if (countdown > 0) {
+      const timer = setTimeout(() => setCountdown(countdown - 1), 1000)
+      return () => clearTimeout(timer)
+    } else {
+      setGameStatus('playing')
+      setCountdown(null)
+    }
+  }, [countdown])
+
+  // Obstacle animation effect (trees, bushes, rocks)
+  useEffect(() => {
+    if (gameStatus !== 'playing') return
+
+    const interval = setInterval(() => {
+      const types: Array<'tree' | 'bush' | 'fence'> = ['tree', 'bush', 'fence']
+      const randomType = types[Math.floor(Math.random() * types.length)]
+      
+      setObstacles(prev => [...prev, { 
+        id: Date.now() + Math.random(),
+        type: randomType,
+        y: Math.random() * 5 // Random vertical position for variety
+      }])
+    }, 1800) // Spawn a new obstacle every 1.8 seconds
+
+    return () => clearInterval(interval)
+  }, [gameStatus])
+
+  // Clean up old obstacles that have moved off screen
+  useEffect(() => {
+    const cleanup = setInterval(() => {
+      setObstacles(prev => prev.slice(-10)) // Keep only last 10 obstacles
+    }, 5000)
+
+    return () => clearInterval(cleanup)
+  }, [])
+
   const fireConfetti = () => {
     const end = Date.now() + 5000
     const frame = () => {
@@ -92,9 +139,6 @@ export default function AdminDashboard() {
     }
     frame()
   }
-
-  const currentStage =
-    stages.find(s => progress >= s.min && progress < s.max) || stages[3]
 
   /* -------------------- UI -------------------- */
 
@@ -123,7 +167,6 @@ export default function AdminDashboard() {
           <button
             onClick={() =>
               createRoom((res: any) => {
-                console.log('Room created:', res)
                 setRoomId(res.roomId)
                 setQrCode(res.qrCode)
                 setJoinUrl(res.joinUrl)
@@ -147,12 +190,8 @@ export default function AdminDashboard() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="w-full max-w-2xl rounded-3xl border border-white/10 bg-white/5 p-12 text-center backdrop-blur"
+          className="w-full max-w-3xl rounded-3xl border border-white/10 bg-white/5 p-12 text-center backdrop-blur"
         >
-          <h1 className="mb-8 bg-gradient-to-r from-orange-400 to-yellow-400 bg-clip-text text-4xl font-bold text-transparent">
-            🎮 Game Lobby
-          </h1>
-
           <div className="mb-8">
             <p className="mb-4 text-sm uppercase tracking-widest text-gray-400">
               Room ID
@@ -162,7 +201,7 @@ export default function AdminDashboard() {
             </p>
           </div>
 
-          <div className="mb-8 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="mb-8 flex gap-8">
             <div className="flex-1">
               <p className="mb-4 text-sm uppercase tracking-widest text-gray-400">
                 Scan to Join
@@ -171,12 +210,13 @@ export default function AdminDashboard() {
                 <img
                   src={qrCode}
                   alt="QR Code"
-                  className="mx-auto rounded-xl border border-white/20 p-4 bg-white w-64 h-64"
+                  className="mx-auto rounded-xl border border-white/20 p-4 bg-white w-[70%] aspect-square object-contain"
                 />
               )}
             </div>
+          </div>
 
-            <div className="flex-1">
+          <div className="flex-1 mb-8">
               <p className="mb-4 text-sm uppercase tracking-widest text-gray-400">
                 Players ({players.length})
               </p>
@@ -184,20 +224,19 @@ export default function AdminDashboard() {
                 {players.length === 0 ? (
                   <p className="text-gray-400">Waiting for players...</p>
                 ) : (
-                  <ul className="space-y-2">
+                  <div className="flex gap-2 flex-wrap justify-center">
                     {players.map(player => (
-                      <li
+                      <div
                         key={player.id}
-                        className="rounded-lg bg-white/10 px-4 py-2 text-white"
+                        className="rounded-lg w-fit bg-white/10 text-xl px-4 py-2 text-white"
                       >
-                        👤 {player.name}
-                      </li>
+                        {player.name}
+                      </div>
                     ))}
-                  </ul>
+                  </div>
                 )}
               </div>
             </div>
-          </div>
 
           {roomId && 
             <button
@@ -219,53 +258,330 @@ export default function AdminDashboard() {
     )
   }
 
-  if (gameStatus === 'playing') {
-    const bgUrl = 'https://assets.filum.ai/20260130_135735_526faeb6b1.png'
-    return (
-      <div className="h-screen bg-gradient-to-br from-[#0A0E27] to-[#050816] p-10 flex justify-center flex-col relative" style={{ backgroundImage: `url(${bgUrl})`, backgroundSize: 'cover' }}>
+  /* -------------------- COUNTDOWN -------------------- */
 
-         <AnimatePresence>
-            {clickEffects.map(e => (
-              <motion.div
-                key={e.id}
-                className="absolute rounded-full px-4 py-2 text-sm font-semibold text-white shadow-lg z-999 backdrop-blur"
-                style={{ left: `${e.x}%`, top: `${e.y}%`, backgroundColor: e.color }}
-                initial={{ opacity: 0, scale: 0 }}
-                animate={{ opacity: 1, scale: 1, y: -40 }}
-                exit={{ opacity: 0 }}
-              >
-                {e.name}
-              </motion.div>
-            ))}
+  if (countdown !== null && countdown >= 0) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-[#0A0E27] to-[#050816]">
+        <motion.div
+          key={countdown}
+          initial={{ scale: 0.5, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 1.5, opacity: 0 }}
+          transition={{ duration: 0.3 }}
+          className="text-center"
+        >
+          {countdown === 0 ? (
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: [0, 1.2, 1] }}
+              className="text-9xl font-bold"
+            >
+              🏁
+            </motion.div>
+          ) : (
+            <motion.div
+              animate={{ scale: [1, 1.1, 1] }}
+              transition={{ duration: 0.5 }}
+            >
+              <div className="text-[200px] font-bold bg-gradient-to-r from-orange-400 to-yellow-400 bg-clip-text text-transparent">
+                {countdown}
+              </div>
+            </motion.div>
+          )}
+          <motion.p
+            className="mt-8 text-2xl text-gray-400"
+            animate={{ opacity: [0.5, 1, 0.5] }}
+            transition={{ duration: 1, repeat: Infinity }}
+          >
+            {countdown === 0 ? 'GO!' : 'Get Ready...'}
+          </motion.p>
+        </motion.div>
+      </div>
+    )
+  }
+
+  /* -------------------- COUNTDOWN -------------------- */
+
+  if (countdown !== null && countdown >= 0) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-[#0A0E27] to-[#050816]">
+        <motion.div
+          key={countdown}
+          initial={{ scale: 0.5, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 1.5, opacity: 0 }}
+          transition={{ duration: 0.3 }}
+          className="text-center"
+        >
+          {countdown === 0 ? (
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: [0, 1.2, 1] }}
+              className="text-9xl font-bold"
+            >
+              🏁
+            </motion.div>
+          ) : (
+            <motion.div
+              animate={{ scale: [1, 1.1, 1] }}
+              transition={{ duration: 0.5 }}
+            >
+              <div className="text-[200px] font-bold bg-gradient-to-r from-orange-400 to-yellow-400 bg-clip-text text-transparent">
+                {countdown}
+              </div>
+            </motion.div>
+          )}
+          <motion.p
+            className="mt-8 text-2xl text-gray-400"
+            animate={{ opacity: [0.5, 1, 0.5] }}
+            transition={{ duration: 1, repeat: Infinity }}
+          >
+            {countdown === 0 ? 'GO!' : 'Get Ready...'}
+          </motion.p>
+        </motion.div>
+      </div>
+    )
+  }
+
+  if (gameStatus === 'playing') {
+    const bgUrl = '/playing_background.png'
+    const treeUrl = '/tree.gif'
+    const horseUrl = '/horse-2.gif'
+    const bushUrl = '/bush.png'
+    const fences = '/fences.png'
+    return (
+      <div className="h-screen bg-gradient-to-br from-[#0A0E27] to-[#050816] p-10 flex justify-center flex-col relative overflow-hidden" style={{ backgroundImage: `url(${bgUrl})`, backgroundSize: 'cover' }}>
+
+          {/* Moving obstacles effect */}
+          <AnimatePresence>
+            {obstacles.map(obstacle => {
+              const obstacleConfig = {
+                tree: { src: treeUrl, height: 'h-96', duration: 5 },
+                bush: { src: bushUrl, height: 'h-20', duration: 6 },
+                fence: { src: fences, height: 'h-24', duration: 5.5 },
+              }[obstacle.type]
+
+              return (
+                <motion.img
+                  key={obstacle.id}
+                  src={obstacleConfig.src}
+                  alt={obstacle.type}
+                  className={`absolute ${obstacleConfig.height} w-auto z-10 h- `}
+                  style={{ bottom: `${11}%` }}
+                  initial={{ right: '-10%' }}
+                  animate={{ right: '110%' }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: obstacleConfig.duration, ease: 'linear' }}
+                  onAnimationComplete={() => {
+                    setObstacles(prev => prev.filter(o => o.id !== obstacle.id))
+                  }}
+                />
+              )
+            })}
           </AnimatePresence>
+
+          <div className='relative w-full h-full'>
+            <AnimatePresence>
+              {clickEffects.map(e => (
+                <motion.div
+                  key={e.id}
+                  className="absolute text-sm rounded-full font-semibold text-white shadow-lg z-999"
+                  style={{ 
+                    left: `${e.x}%`, 
+                    top: `${e.y}%`, 
+                    backgroundColor: e.color,
+                  }}
+                  initial={{ opacity: 0, scale: 0 }}
+                  animate={{ opacity: 1, scale: 1, y: -40 }}
+                  exit={{ opacity: 0 }}
+                >
+                  <div className="px-8 py-5">
+                    {e.name}
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
     
 
-        <div className="mt-auto">
-              <img
-            src='/horse.gif'
-            className="mx-auto w-xl rounded-xl"
-          />
-          <div className=' rounded-3xl border border-white/10 bg-white p-8 backdrop-blur'>
+        <div className="mt-auto z-20 relative w-full">
+          <div className="relative h-40 mb-4 flex items-center -top-14">
+            <motion.img
+              src={horseUrl}
+              className="w-2xl rounded-xl absolute"
+              animate={{ left: `calc(${progress}% - 290px )` }}
+              transition={{ duration: 0.3 }}
+            />
+          </div>
+          <div className=''>
           <div className="mb-3 flex justify-between">
-            <span style={{ color: currentStage.color }} className="font-bold">
-              {currentStage.label}
-            </span>
-            <span className="font-bold">{Math.round(progress)}%</span>
           </div>
 
-          <div className="h-8 overflow-hidden rounded-full bg-white/10">
+          <div className="h-10 overflow-hidden rounded-full bg-white p-4 relative flex items-center justify-center">
             <motion.div
-              className="h-full"
-              style={{ backgroundColor: currentStage.color }}
+              className="h-[90%] mx-[2px] rounded-full absolute left-0 p-1"
+              style={{ backgroundColor: ' #FF6F00'}}
               animate={{ width: `${progress}%` }}
               transition={{ duration: 0.3 }}
             />
+            <span className="relative z-10 font-semibold text-gray-800">{progress.toFixed(0)}%</span>
           </div>
           </div>
         </div>
 
       
       </div>
+    )
+  }
+
+  /* -------------------- COMPLETED -------------------- */
+
+  if (gameStatus === 'completed') {
+    const endingScreenUrl = '/ending_screen.webp'
+    return (
+    <div className="relative min-h-screen">
+      <Image
+        src={endingScreenUrl}
+        alt="Ending screen"
+        fill
+        priority
+        quality={70}
+        sizes="100vw"
+        style={{ objectFit: 'cover', objectPosition: 'top' }}
+      />
+    </div>
+      // <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-[#0A0E27] via-[#1a0f2e] to-[#050816] p-5 relative overflow-hidden">
+      //   {/* Animated background particles */}
+      //   <div className="absolute inset-0 overflow-hidden">
+      //     {[...Array(20)].map((_, i) => (
+      //       <motion.div
+      //         key={i}
+      //         className="absolute rounded-full bg-gradient-to-br from-orange-400/30 to-yellow-400/30"
+      //         style={{
+      //           width: Math.random() * 100 + 50,
+      //           height: Math.random() * 100 + 50,
+      //           left: `${Math.random() * 100}%`,
+      //           top: `${Math.random() * 100}%`,
+      //         }}
+      //         animate={{
+      //           y: [0, -30, 0],
+      //           opacity: [0.3, 0.6, 0.3],
+      //           scale: [1, 1.2, 1],
+      //         }}
+      //         transition={{
+      //           duration: Math.random() * 3 + 2,
+      //           repeat: Infinity,
+      //           ease: 'easeInOut',
+      //         }}
+      //       />
+      //     ))}
+      //   </div>
+
+      //   <motion.div
+      //     initial={{ opacity: 0, scale: 0.8 }}
+      //     animate={{ opacity: 1, scale: 1 }}
+      //     transition={{ duration: 0.5 }}
+      //     className="relative z-10 w-full max-w-3xl rounded-3xl border border-white/10 bg-white/5 p-12 text-center backdrop-blur-xl"
+      //   >
+      //     {/* Trophy/Victory Icon */}
+      //     <motion.div
+      //       initial={{ scale: 0, rotate: -180 }}
+      //       animate={{ scale: 1, rotate: 0 }}
+      //       transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
+      //       className="mb-6"
+      //     >
+      //       <span className="text-9xl">🏆</span>
+      //     </motion.div>
+
+      //     <motion.h1
+      //       initial={{ opacity: 0, y: 20 }}
+      //       animate={{ opacity: 1, y: 0 }}
+      //       transition={{ delay: 0.3 }}
+      //       className="mb-4 bg-gradient-to-r from-orange-400 via-yellow-400 to-orange-400 bg-clip-text text-6xl font-bold text-transparent"
+      //     >
+      //       Race Complete!
+      //     </motion.h1>
+
+      //     <motion.p
+      //       initial={{ opacity: 0, y: 20 }}
+      //       animate={{ opacity: 1, y: 0 }}
+      //       transition={{ delay: 0.4 }}
+      //       className="mb-8 text-2xl text-gray-300"
+      //     >
+      //       🎉 Congratulations! The race has finished! 🎉
+      //     </motion.p>
+
+      //     {/* Stats Section */}
+      //     <motion.div
+      //       initial={{ opacity: 0, y: 20 }}
+      //       animate={{ opacity: 1, y: 0 }}
+      //       transition={{ delay: 0.5 }}
+      //       className="mb-8 grid grid-cols-2 gap-4"
+      //     >
+      //       <div className="rounded-xl bg-gradient-to-br from-orange-500/20 to-yellow-500/20 p-6 backdrop-blur">
+      //         <p className="mb-2 text-sm uppercase tracking-widest text-gray-400">
+      //           Total Clicks
+      //         </p>
+      //         <p className="text-4xl font-bold text-white">{totalClicks}</p>
+      //       </div>
+      //       <div className="rounded-xl bg-gradient-to-br from-orange-500/20 to-yellow-500/20 p-6 backdrop-blur">
+      //         <p className="mb-2 text-sm uppercase tracking-widest text-gray-400">
+      //           Players
+      //         </p>
+      //         <p className="text-4xl font-bold text-white">{players.length}</p>
+      //       </div>
+      //     </motion.div>
+
+      //     {/* Player List */}
+      //     <motion.div
+      //       initial={{ opacity: 0, y: 20 }}
+      //       animate={{ opacity: 1, y: 0 }}
+      //       transition={{ delay: 0.6 }}
+      //       className="mb-8"
+      //     >
+      //       <p className="mb-4 text-sm uppercase tracking-widest text-gray-400">
+      //         Amazing Players
+      //       </p>
+      //       <div className="max-h-48 overflow-y-auto rounded-xl bg-white/5 p-4">
+      //         <ul className="space-y-2">
+      //           {players.map((player, index) => (
+      //             <motion.li
+      //               key={player.id}
+      //               initial={{ opacity: 0, x: -20 }}
+      //               animate={{ opacity: 1, x: 0 }}
+      //               transition={{ delay: 0.7 + index * 0.1 }}
+      //               className="rounded-lg bg-gradient-to-r from-orange-500/30 to-yellow-500/30 px-4 py-3 text-white font-semibold"
+      //             >
+      //               {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '🎮'} {player.name}
+      //             </motion.li>
+      //           ))}
+      //         </ul>
+      //       </div>
+      //     </motion.div>
+
+      //     {/* New Game Button */}
+      //     <motion.button
+      //       initial={{ opacity: 0, y: 20 }}
+      //       animate={{ opacity: 1, y: 0 }}
+      //       transition={{ delay: 0.8 }}
+      //       onClick={() => {
+      //         setGameStatus('initial')
+      //         setRoomId(null)
+      //         setQrCode(null)
+      //         setJoinUrl(null)
+      //         setPlayers([])
+      //         setProgress(0)
+      //         setTotalClicks(0)
+      //         setClickEffects([])
+      //         setObstacles([])
+      //       }}
+      //       className="rounded-xl bg-gradient-to-r from-orange-500 to-yellow-500 px-8 py-4 font-semibold text-white shadow-lg hover:scale-105 transition"
+      //     >
+      //       Start New Game
+      //     </motion.button>
+      //   </motion.div>
+      // </div>
     )
   }
 

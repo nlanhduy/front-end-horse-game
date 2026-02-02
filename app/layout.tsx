@@ -16,6 +16,15 @@ const geistMono = Geist_Mono({
 export const metadata = {
   title: 'Filum Year End Party Horse Game',
   description: 'Real-time multiplayer game for New Year celebration',
+  other: {
+    preload: [
+      {
+        rel: 'preload',
+        as: 'image',
+        href: '/ending_screen.webp',
+      },
+    ],
+  },
 }
 
 export default function RootLayout({
@@ -30,6 +39,11 @@ export default function RootLayout({
       >
         {children}
       </body>
+      <link
+        rel="preload"
+        as="image"
+        href="/ending_screen.webp"
+      />
     </html>
   );
 }

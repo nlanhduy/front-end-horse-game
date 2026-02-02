@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/immutability */
  
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client'
@@ -24,6 +25,7 @@ export default function PlayPage() {
   const [clickCount, setClickCount] = useState<number>(0)
   const [isAnimating, setIsAnimating] = useState<boolean>(false)
   const [tapEffects, setTapEffects] = useState<ClickEffect[]>([])
+  const [countdown, setCountdown] = useState<number | null>(null)
 
   const buttonRef = useRef<HTMLButtonElement | null>(null)
 
@@ -50,7 +52,12 @@ export default function PlayPage() {
 
     rejoinRoom(roomId, playerId, playerName, (res: any) => {
       if (res.success) {
-        setGameStatus(res.roomStatus)
+        const status = res.roomStatus
+        if (status === 'playing') {
+          setCountdown(5)
+        } else {
+          setGameStatus(status)
+        }
         setProgress(res.progress ?? 0)
       }
     })
@@ -61,11 +68,56 @@ export default function PlayPage() {
 
     getRoomState(roomId, (res: any) => {
       if (res.success && res.room?.status) {
-        setGameStatus(res.room.status)
+        const status = res.room.status
+        if (status === 'playing') {
+          setCountdown(5)
+        } else {
+          setGameStatus(status)
+        }
         setProgress(res.room.progress ?? 0)
       }
     })
   }, [isConnected, roomId, getRoomState])
+
+  useEffect(() => {
+    if (!isConnected) return
+
+    const handleGameStarted = () => {
+      setCountdown(5)
+    }
+
+    const handleProgressUpdate = (data: { progress: number }) => {
+      setProgress(data.progress)
+    }
+
+    const handleGameComplete = () => {
+      setGameStatus('completed')
+      fireConfetti()
+    }
+
+    on('game-started', handleGameStarted)
+    on('progress-update', handleProgressUpdate)
+    on('game-complete', handleGameComplete)
+
+    return () => {
+      off('game-started', handleGameStarted)
+      off('progress-update', handleProgressUpdate)
+      off('game-complete', handleGameComplete)
+    }
+  }, [isConnected, on, off])
+
+  // Countdown timer
+  useEffect(() => {
+    if (countdown === null) return
+    
+    if (countdown > 0) {
+      const timer = setTimeout(() => setCountdown(countdown - 1), 1000)
+      return () => clearTimeout(timer)
+    } else {
+      setGameStatus('playing')
+      setCountdown(null)
+    }
+  }, [countdown])
 
   /* -------------------- ACTIONS -------------------- */
 
@@ -174,6 +226,91 @@ export default function PlayPage() {
     )
   }
 
+  /* -------------------- COUNTDOWN -------------------- */
+
+  if (countdown !== null && countdown >= 0) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-[#0A0E27] to-[#050816]">
+        <motion.div
+          key={countdown}
+          initial={{ scale: 0.5, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 1.5, opacity: 0 }}
+          transition={{ duration: 0.3 }}
+          className="text-center"
+        >
+          {countdown === 0 ? (
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: [0, 1.2, 1] }}
+              className="text-9xl font-bold"
+            >
+              🏁
+            </motion.div>
+          ) : (
+            <motion.div
+              animate={{ scale: [1, 1.1, 1] }}
+              transition={{ duration: 0.5 }}
+            >
+              <div className="text-[200px] font-bold bg-gradient-to-r from-orange-400 to-yellow-400 bg-clip-text text-transparent">
+                {countdown}
+              </div>
+            </motion.div>
+          )}
+          <motion.p
+            className="mt-8 text-2xl text-gray-400"
+            animate={{ opacity: [0.5, 1, 0.5] }}
+            transition={{ duration: 1, repeat: Infinity }}
+          >
+            {countdown === 0 ? 'GO!' : 'Get Ready...'}
+          </motion.p>
+        </motion.div>
+      </div>
+    )
+  }
+
+  /* -------------------- PLAYING -------------------- */
+
+  if (gameStatus === 'playing') {
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-[#0A0E27] to-[#050816]">
+        <motion.div
+          key={countdown}
+          initial={{ scale: 0.5, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 1.5, opacity: 0 }}
+          transition={{ duration: 0.3 }}
+          className="text-center"
+        >
+          {countdown === 0 ? (
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: [0, 1.2, 1] }}
+              className="text-9xl font-bold"
+            >
+              🏁
+            </motion.div>
+          ) : (
+            <motion.div
+              animate={{ scale: [1, 1.1, 1] }}
+              transition={{ duration: 0.5 }}
+            >
+              <div className="text-[200px] font-bold bg-gradient-to-r from-orange-400 to-yellow-400 bg-clip-text text-transparent">
+                {countdown}
+              </div>
+            </motion.div>
+          )}
+          <motion.p
+            className="mt-8 text-2xl text-gray-400"
+            animate={{ opacity: [0.5, 1, 0.5] }}
+            transition={{ duration: 1, repeat: Infinity }}
+          >
+            {countdown === 0 ? 'GO!' : 'Get Ready...'}
+          </motion.p>
+        </motion.div>
+      </div>
+    
+  }
+
   if (gameStatus === 'playing') {
     return (
       <div
@@ -202,25 +339,6 @@ export default function PlayPage() {
               >
                 {clickCount}
               </motion.p>
-            </div>
-          </div>
-
-          {/* Progress */}
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur">
-            <div className="mb-4 flex items-center justify-between">
-              <span className="text-4xl">{currentStage.emoji}</span>
-              <span className="text-3xl font-bold">
-                {Math.round(progress)}%
-              </span>
-            </div>
-
-            <div className="h-7 overflow-hidden rounded-full bg-white/10">
-              <motion.div
-                className="h-full rounded-full"
-                style={{ background: currentStage.gradient }}
-                animate={{ width: `${progress}%` }}
-                transition={{ duration: 0.3 }}
-              />
             </div>
           </div>
 
@@ -309,7 +427,7 @@ export default function PlayPage() {
           </h1>
 
           <p className="mb-8 text-gray-400">
-            You helped bring in 2025!
+            You helped bring in 2026!
           </p>
 
           <div className="mb-8 rounded-2xl border border-orange-400/30 bg-white/5 px-12 py-6">
